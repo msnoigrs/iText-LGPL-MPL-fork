@@ -483,7 +483,7 @@ public class PdfDocument extends Document {
                     Annotation annot = (Annotation) element;
                     Rectangle rect = new Rectangle(0, 0);
                     if (line != null)
-                    	rect = new Rectangle(annot.llx(indentRight() - line.widthLeft()), annot.lly(indentTop() - currentHeight), annot.urx(indentRight() - line.widthLeft() + 20), annot.ury(indentTop() - currentHeight - 20));
+                        rect = new Rectangle(annot.llx(indentRight() - line.widthLeft()), annot.ury(indentTop() - currentHeight - 20), annot.urx(indentRight() - line.widthLeft() + 20), annot.lly(indentTop() - currentHeight));
                     PdfAnnotation an = PdfAnnotationsImp.convertAnnotation(writer, annot, rect);
                     annotationsImp.addPlainAnnotation(an);
                     pageEmpty = false;
@@ -850,7 +850,7 @@ public class PdfDocument extends Document {
      */
     public boolean newPage() {
         lastElementType = -1;
-        if (writer == null || (writer.getDirectContent().size() == 0 && writer.getDirectContentUnder().size() == 0 && (pageEmpty || writer.isPaused()))) {
+        if (isPageEmpty()) {
         	setNewPageSizeAndMargins();
             return false;
         }
@@ -1581,6 +1581,10 @@ public class PdfDocument extends Document {
                             hScale = hs.floatValue();
                         text.setTextMatrix(hScale, b, c, 1, xMarker, yMarker);
                     }
+                    if (chunk.isAttribute(Chunk.CHAR_SPACING)) {
+                    	Float cs = (Float) chunk.getAttribute(Chunk.CHAR_SPACING);
+						text.setCharacterSpacing(cs.floatValue());
+					}
                     if (chunk.isImage()) {
                         Image image = chunk.getImage();
                         float matrix[] = image.matrix();
@@ -1644,7 +1648,7 @@ public class PdfDocument extends Document {
                 if (hScale != lastHScale) {
                     lastHScale = hScale;
                     text.setWordSpacing(baseWordSpacing / hScale);
-                    text.setCharacterSpacing(baseCharacterSpacing / hScale);
+                    text.setCharacterSpacing(baseCharacterSpacing / hScale + text.getCharacterSpacing());
                 }
                 String s = chunk.toString();
                 int idx = s.indexOf(' ');
@@ -1668,7 +1672,7 @@ public class PdfDocument extends Document {
                 if (isJustified && hScale != lastHScale) {
                     lastHScale = hScale;
                     text.setWordSpacing(baseWordSpacing / hScale);
-                    text.setCharacterSpacing(baseCharacterSpacing / hScale);
+                    text.setCharacterSpacing(baseCharacterSpacing / hScale + text.getCharacterSpacing());
                 }
                 text.showText(chunk.toString());
             }
@@ -1686,6 +1690,9 @@ public class PdfDocument extends Document {
             if (chunk.isAttribute(Chunk.SKEW) || chunk.isAttribute(Chunk.HSCALE)) {
                 adjustMatrix = true;
                 text.setTextMatrix(xMarker, yMarker);
+            }
+            if (chunk.isAttribute(Chunk.CHAR_SPACING)) {
+				text.setCharacterSpacing(baseCharacterSpacing);
             }
         }
         if (isJustified) {
@@ -2092,7 +2099,8 @@ public class PdfDocument extends Document {
             return false;
         obj[2] = destination;
         localDestinations.put(name, obj);
-        destination.addPage(writer.getCurrentPage());
+        if (!destination.hasPage())
+        	destination.addPage(writer.getCurrentPage());
         return true;
     }
 
@@ -2288,10 +2296,14 @@ public class PdfDocument extends Document {
 //	[U2] empty pages
 
     /** This checks if the page is empty. */
-    protected boolean pageEmpty = true;
+    private boolean pageEmpty = true;
 
     void setPageEmpty(boolean pageEmpty) {
         this.pageEmpty = pageEmpty;
+    }
+
+    boolean isPageEmpty() {
+        return writer == null || (writer.getDirectContent().size() == 0 && writer.getDirectContentUnder().size() == 0 && (pageEmpty || writer.isPaused()));
     }
 
 //	[U3] page actions
