@@ -955,6 +955,7 @@ class PdfStamperImp extends PdfWriter {
             PdfReader.killIndirect(iFields);
             acrodic.put(PdfName.FIELDS, new PdfArray());
         }
+        acrodic.remove(PdfName.SIGFLAGS);
 //        PdfReader.killIndirect(acro);
 //        reader.getCatalog().remove(PdfName.ACROFORM);
     }
@@ -1206,10 +1207,10 @@ class PdfStamperImp extends PdfWriter {
                             switch (rotation) {
                                 case 90:
                                     annot.put(PdfName.RECT, new PdfRectangle(
-                                    pageSize.getTop() - rect.bottom(),
-                                    rect.left(),
                                     pageSize.getTop() - rect.top(),
-                                    rect.right()));
+                                    rect.right(),
+                                    pageSize.getTop() - rect.bottom(),
+                                    rect.left()));
                                     break;
                                 case 180:
                                     annot.put(PdfName.RECT, new PdfRectangle(
@@ -1311,6 +1312,13 @@ class PdfStamperImp extends PdfWriter {
             old.put(nn, entry.getValue());
         }
         PdfDictionary tree = PdfNameTree.writeTree(old, this);
+        // Remove old EmbeddedFiles object if preset
+        PdfObject oldEmbeddedFiles = names.get(PdfName.EMBEDDEDFILES);
+        if (oldEmbeddedFiles != null) {
+            PdfReader.killIndirect(oldEmbeddedFiles);
+        }
+
+        // Add new EmbeddedFiles object
         names.put(PdfName.EMBEDDEDFILES, addToBody(tree).getIndirectReference());
     }
 
