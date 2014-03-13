@@ -1613,8 +1613,19 @@ public class PdfGraphics2D extends Graphics2D {
                 PdfPatternPainter pattern = cb.createPattern(width, height);
                 image.setAbsolutePosition(0,0);
                 pattern.addImage(image);
-                if (fill)
+                if (fill) {
+                    if (currentFillGState != 255) {
+                        currentFillGState = 255;
+                        PdfGState gs = fillGState[255];
+                        if (gs == null) {
+                            gs = new PdfGState();
+                            gs.setFillOpacity(1);
+                            fillGState[255] = gs;
+                        }
+                        cb.setGState(gs);
+                    }
                     cb.setPatternFill(pattern);
+                }
                 else
                     cb.setPatternStroke(pattern);
             } catch (Exception ex) {
