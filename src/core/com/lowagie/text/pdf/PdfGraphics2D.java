@@ -1086,7 +1086,7 @@ public class PdfGraphics2D extends Graphics2D {
             followPath(s, CLIP);
         }
         paintFill = paintStroke = null;
-        currentFillGState = currentStrokeGState = 255;
+        currentFillGState = currentStrokeGState = -1;
         oldStroke = strokeOne;
     }
     
@@ -1487,7 +1487,7 @@ public class PdfGraphics2D extends Graphics2D {
         } catch (Exception ex) {
             throw new IllegalArgumentException();
         }
-        if (currentFillGState != 255) {
+        if (currentFillGState >= 0 && currentFillGState != 255) {
             PdfGState gs = fillGState[currentFillGState];
             cb.setGState(gs);
         }        
