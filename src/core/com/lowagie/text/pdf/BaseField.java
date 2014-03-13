@@ -111,7 +111,12 @@ public abstract class BaseField {
      */    
     public static final int EDIT = PdfFormField.FF_EDIT;
 
-    /**
+    /** whether or not a list may have multiple selections.  Only applies to /CH LIST
+     * fields, not combo boxes.
+     */
+    public static final int MULTISELECT = PdfFormField.FF_MULTISELECT;
+
+   /**
      * combo box flag.
      */
     public static final int COMB = PdfFormField.FF_COMB;
