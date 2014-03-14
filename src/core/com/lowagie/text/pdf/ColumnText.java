@@ -1434,11 +1434,8 @@ public class ColumnText {
                     ArrayList sub = nt.getRows();
                     
                     // first we add the real header rows (if necessary)
-                    if (!skipHeader) {
-                        for (int j = 0; j < realHeaderRows; ++j) {
-                        	PdfPRow headerRow = table.getRow(j);
-                            sub.add(headerRow);
-                        }
+                    if (!skipHeader && realHeaderRows > 0) {
+                        sub.addAll(table.getRows(0, realHeaderRows));
                     }
                     else
                         nt.setHeaderRows(footerRows);
@@ -1447,9 +1444,11 @@ public class ColumnText {
                     // if k < table.size(), we must indicate that the new table is complete;
                     // otherwise no footers will be added (because iText thinks the table continues on the same page)
                     boolean showFooter = !table.isSkipLastFooter();
+                    boolean newPageFollows = false;
                     if (k < table.size()) {
                     	nt.setComplete(true);
                     	showFooter = true;
+                    	newPageFollows = true;
                     }
                     // we add the footer rows if necessary (not for incomplete tables)
                     for (int j = 0; j < footerRows && nt.isComplete() && showFooter; ++j)
@@ -1457,8 +1456,10 @@ public class ColumnText {
 
                     // we need a correction if the last row needs to be extended
                     float rowHeight = 0;
-                    PdfPRow last = (PdfPRow)sub.get(sub.size() - 1 - footerRows);
-                    if (table.isExtendLastRow()) {
+                    int index = sub.size() - 1;
+                    if (showFooter) index -= footerRows;
+                    PdfPRow last = (PdfPRow)sub.get(index);
+                    if (table.isExtendLastRow(newPageFollows)) {
                         rowHeight = last.getMaxHeights();
                         last.setMaxHeights(yTemp - minY + rowHeight);
                         yTemp = minY;
@@ -1469,7 +1470,7 @@ public class ColumnText {
                         nt.writeSelectedRows(0, -1, x1, yLineWrite, canvases);
                     else
                         nt.writeSelectedRows(0, -1, x1, yLineWrite, canvas);
-                    if (table.isExtendLastRow()) {
+                    if (table.isExtendLastRow(newPageFollows)) {
                         last.setMaxHeights(rowHeight);
                     }
                 }

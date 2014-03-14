@@ -88,7 +88,6 @@ import org.bouncycastle.asn1.DERNull;
 import org.bouncycastle.asn1.DERObject;
 import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.DEROctetString;
-import org.bouncycastle.asn1.DEROutputStream;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERSet;
 import org.bouncycastle.asn1.DERString;
@@ -495,7 +494,7 @@ public class PdfPKCS7 {
                 ASN1Set unat = ASN1Set.getInstance(taggedObject, false);
                 AttributeTable attble = new AttributeTable(unat);
                 Attribute ts = attble.get(PKCSObjectIdentifiers.id_aa_signatureTimeStampToken);
-                if (ts != null) {
+                if (ts != null && ts.getAttrValues().size() > 0) {
                     ASN1Set attributeValues = ts.getAttrValues();
                     ASN1Sequence tokenSequence = ASN1Sequence.getInstance(attributeValues.getObjectAt(0));
                     ContentInfo contentInfo = new ContentInfo(tokenSequence);
@@ -1248,16 +1247,6 @@ public class PdfPKCS7 {
             body.add(new DERSet(digestAlgorithms));
             body.add(contentinfo);
             body.add(new DERTaggedObject(false, 0, dercertificates));
-            
-           if (!crls.isEmpty()) {
-                v = new ASN1EncodableVector();
-                for (Iterator i = crls.iterator();i.hasNext();) {
-                    ASN1InputStream t = new ASN1InputStream(new ByteArrayInputStream(((X509CRL)i.next()).getEncoded()));
-                    v.add(t.readObject());
-                }
-                DERSet dercrls = new DERSet(v);
-                body.add(new DERTaggedObject(false, 1, dercrls));
-            }
             
             // Only allow one signerInfo
             body.add(new DERSet(new DERSequence(signerinfo)));

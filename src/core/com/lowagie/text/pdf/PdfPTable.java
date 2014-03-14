@@ -155,7 +155,7 @@ public class PdfPTable implements LargeElement{
     /**
      * Holds value of property extendLastRow.
      */
-    private boolean extendLastRow;
+    private boolean[] extendLastRow = { false, false };
     
     /**
      * Holds value of property headersInEvent.
@@ -469,7 +469,7 @@ public class PdfPTable implements LargeElement{
 
         skipColsWithRowspanAbove();
         
-        if (currentRowIdx >= currentRow.length) {
+        while (currentRowIdx >= currentRow.length) {
         	int numCols = getNumberOfColumns();
             if (runDirection == PdfWriter.RUN_DIRECTION_RTL) {
                 PdfPCell rtlRow[] = new PdfPCell[numCols];
@@ -491,6 +491,7 @@ public class PdfPTable implements LargeElement{
             rows.add(row);
             currentRow = new PdfPCell[numCols];
             currentRowIdx = 0;
+            skipColsWithRowspanAbove();
             rowCompleted = true;
         }
         
@@ -512,7 +513,19 @@ public class PdfPTable implements LargeElement{
     	while (rowSpanAbove(rows.size(), currentRowIdx))
     		currentRowIdx += direction;
     }
-    
+
+    PdfPCell obtainCell(final int row, final int col) {
+        PdfPCell[] cells = ((PdfPRow)rows.get(row)).getCells();
+        for (int i = 0; i < cells.length; i++) {
+            if (cells[i] != null) {
+                if (col >= i && col < (i + cells[i].getColspan())) {
+                    return cells[i];
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * Checks if there are rows above belonging to a rowspan.
      * @param	currRow	the current row to check
@@ -524,28 +537,28 @@ public class PdfPTable implements LargeElement{
     	
     	if ((currCol >= getNumberOfColumns()) 
     			|| (currCol < 0) 
-    			|| (currRow == 0))
+    			|| (currRow < 1))
     		return false;
     	
     	int row = currRow - 1;
     	PdfPRow aboveRow = (PdfPRow)rows.get(row);
     	if (aboveRow == null)
     		return false;
-    	PdfPCell aboveCell = (PdfPCell)aboveRow.getCells()[currCol];
+    	PdfPCell aboveCell = obtainCell(row, currCol);
     	while ((aboveCell == null) && (row > 0)) {
     		aboveRow  = (PdfPRow)rows.get(--row);
     		if (aboveRow == null)
     			return false;
-    		aboveCell = (PdfPCell)aboveRow.getCells()[currCol];
+    		aboveCell = obtainCell(row, currCol);
     	}
     	
     	int distance = currRow - row;
 
     	if (aboveCell == null) {
         	int col = currCol - 1;
-        	aboveCell = (PdfPCell)aboveRow.getCells()[col];
+        	aboveCell = obtainCell(row, col);
         	while ((aboveCell == null) && (row > 0))
-        		aboveCell = (PdfPCell)aboveRow.getCells()[--col];
+        		aboveCell = obtainCell(row, --col);
         	return aboveCell != null && aboveCell.getRowspan() > distance;
     	}
     	
@@ -863,7 +876,7 @@ public class PdfPTable implements LargeElement{
         	tmprow = (PdfPRow)rows.get(idx - rs);
         	cell = tmprow.getCells()[i];
         	float tmp = 0;
-        	if (cell.getRowspan() == rs + 1) {
+        	if (cell != null && cell.getRowspan() == rs + 1) {
         		tmp = cell.getMaxHeight();
         		while (rs > 0) {
         			tmp -= getRowHeight(idx - rs);
@@ -1424,19 +1437,48 @@ public class PdfPTable implements LargeElement{
      * @return true if the last row will extend; false otherwise
      */
     public boolean isExtendLastRow() {
-        return extendLastRow;
+        return extendLastRow[0];
     }
     
     /**
-     * When set the last row will be extended to fill all the remaining space
-     * to the bottom boundary.
+     * When set the last row on every page will be extended to fill
+     * all the remaining space to the bottom boundary.
      * 
-     * @param extendLastRow true to extend the last row; false otherwise
+     * @param extendLastRows true to extend the last row; false otherwise
      */
-    public void setExtendLastRow(boolean extendLastRow) {
-        this.extendLastRow = extendLastRow;
+    public void setExtendLastRow(boolean extendLastRows) {
+        extendLastRow[0] = extendLastRows;
+		extendLastRow[1] = extendLastRows;
     }
-    
+
+    /**
+     * When set the last row on every page will be extended to fill
+     * all the remaining space to the bottom boundary; except maybe the
+     * final row.
+     *
+     * @param extendLastRows true to extend the last row on each page; false otherwise
+     * @param extendFinalRow false if you don't want to extend the final row of the complete table
+	 * @since iText 5.0.0
+	 */
+	public void setExtendLastRow(boolean extendLastRows, boolean extendFinalRow) {
+		extendLastRow[0] = extendLastRows;
+		extendLastRow[1] = extendFinalRow;
+	}
+
+    /**
+     * Gets the value of the last row extension, taking into account
+     * if the final row is reached or not.
+     *
+     * @return true if the last row will extend; false otherwise
+     * @since iText 5.0.0
+     */
+    public boolean isExtendLastRow(boolean newPageFollows) {
+    	if (newPageFollows) {
+            return extendLastRow[0];	
+    	}
+		return extendLastRow[1];
+    }
+
     /**
      * Gets the header status inclusion in PdfPTableEvent.
      * 
