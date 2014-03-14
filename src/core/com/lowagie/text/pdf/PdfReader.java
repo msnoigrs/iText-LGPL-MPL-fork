@@ -125,6 +125,7 @@ public class PdfReader implements PdfViewerPreferences {
     protected ArrayList strings = new ArrayList();
     protected boolean sharedStreams = true;
     protected boolean consolidateNamedDestinations = false;
+    protected boolean remoteToLocalNamedDestinations = false;
     protected int rValue;
     protected int pValue;
     private int objNum;
@@ -1634,6 +1635,8 @@ public class PdfReader implements PdfViewerPreferences {
                 int num = tokens.getReference();
                 PRIndirectReference ref = new PRIndirectReference(this, num, tokens.getGeneration());
                 return ref;
+            case PRTokeniser.TK_ENDOFFILE:
+                throw new IOException("Unexpected end of file");
             default:
                 String sv = tokens.getStringValue();
                 if ("null".equals(sv)) {
@@ -2604,51 +2607,6 @@ public class PdfReader implements PdfViewerPreferences {
         return new HashMap();
     }
 
-    private boolean replaceNamedDestination(PdfObject obj, HashMap names) {
-        obj = getPdfObject(obj);
-        int objIdx = lastXrefPartial;
-        releaseLastXrefPartial();
-        if (obj != null && obj.isDictionary()) {
-            PdfObject ob2 = getPdfObjectRelease(((PdfDictionary)obj).get(PdfName.DEST));
-            Object name = null;
-            if (ob2 != null) {
-                if (ob2.isName())
-                    name = ob2;
-                else if (ob2.isString())
-                    name = ob2.toString();
-                PdfArray dest = (PdfArray)names.get(name);
-                if (dest != null) {
-                    ((PdfDictionary)obj).put(PdfName.DEST, dest);
-                    setXrefPartialObject(objIdx, obj);
-                    return true;
-                }
-            }
-            else if ((ob2 = getPdfObject(((PdfDictionary)obj).get(PdfName.A))) != null) {
-                int obj2Idx = lastXrefPartial;
-                releaseLastXrefPartial();
-                PdfDictionary dic = (PdfDictionary)ob2;
-                PdfName type = (PdfName)getPdfObjectRelease(dic.get(PdfName.S));
-                if (PdfName.GOTO.equals(type)) {
-                    PdfObject ob3 = getPdfObjectRelease(dic.get(PdfName.D));
-                    if (ob3 != null) {
-                        if (ob3.isName())
-                            name = ob3;
-                        else if (ob3.isString())
-                            name = ob3.toString();
-                    }
-                    PdfArray dest = (PdfArray)names.get(name);
-                    if (dest != null) {
-                        dic.put(PdfName.D, dest);
-                        setXrefPartialObject(obj2Idx, ob2);
-                        setXrefPartialObject(objIdx, obj);
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
     /**
      * Removes all the fields from the document.
      */
@@ -2725,6 +2683,82 @@ public class PdfReader implements PdfViewerPreferences {
         }
     }
 
+    /**
+     * Replaces remote named links with local destinations that have the same name.
+     * @since	5.0
+     */
+    public void makeRemoteNamedDestinationsLocal() {
+        if (remoteToLocalNamedDestinations)
+            return;
+        remoteToLocalNamedDestinations = true;
+        HashMap names = getNamedDestination(true);
+        if (names.isEmpty())
+            return;
+        for (int k = 1; k <= pageRefs.size(); ++k) {
+            PdfDictionary page = pageRefs.getPageN(k);
+            PdfObject annotsRef;
+            PdfArray annots = (PdfArray)getPdfObject(annotsRef = page.get(PdfName.ANNOTS));
+            int annotIdx = lastXrefPartial;
+            releaseLastXrefPartial();
+            if (annots == null) {
+                pageRefs.releasePage(k);
+                continue;
+            }
+            boolean commitAnnots = false;
+            for (int an = 0; an < annots.size(); ++an) {
+                PdfObject objRef = annots.getPdfObject(an);
+                if (convertNamedDestination(objRef, names) && !objRef.isIndirect())
+                    commitAnnots = true;
+            }
+            if (commitAnnots)
+                setXrefPartialObject(annotIdx,  annots);
+            if (!commitAnnots || annotsRef.isIndirect())
+                pageRefs.releasePage(k);
+        }
+    }
+    
+    /**
+     * Converts a remote named destination GoToR with a local named destination
+     * if there's a corresponding name.
+     * @param	obj	an annotation that needs to be screened for links to external named destinations.
+     * @param	names	a map with names of local named destinations
+     * @since	iText 5.0
+     */
+    private boolean convertNamedDestination(PdfObject obj, HashMap names) {
+        obj = getPdfObject(obj);
+        int objIdx = lastXrefPartial;
+        releaseLastXrefPartial();
+        if (obj != null && obj.isDictionary()) {
+            PdfObject ob2 = getPdfObject(((PdfDictionary)obj).get(PdfName.A));
+            if (ob2 != null) {
+                int obj2Idx = lastXrefPartial;
+                releaseLastXrefPartial();
+                PdfDictionary dic = (PdfDictionary)ob2;
+                PdfName type = (PdfName)getPdfObjectRelease(dic.get(PdfName.S));
+                if (PdfName.GOTOR.equals(type)) {
+                    PdfObject ob3 = getPdfObjectRelease(dic.get(PdfName.D));
+                    Object name = null;
+                    if (ob3 != null) {
+                        if (ob3.isName())
+                            name = ob3;
+                        else if (ob3.isString())
+                            name = ob3.toString();
+                        PdfArray dest = (PdfArray)names.get(name);
+                        if (dest != null) {
+                        	dic.remove(PdfName.F);
+                        	dic.remove(PdfName.NEWWINDOW);
+                        	dic.put(PdfName.S, PdfName.GOTO);
+                        	setXrefPartialObject(obj2Idx, ob2);
+                        	setXrefPartialObject(objIdx, obj);
+                        	return true;
+                        }
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
     /** Replaces all the local named links with the actual destinations. */
     public void consolidateNamedDestinations() {
         if (consolidateNamedDestinations)
@@ -2758,6 +2792,51 @@ public class PdfReader implements PdfViewerPreferences {
         if (outlines == null)
             return;
         iterateBookmarks(outlines.get(PdfName.FIRST), names);
+    }
+
+    private boolean replaceNamedDestination(PdfObject obj, HashMap names) {
+        obj = getPdfObject(obj);
+        int objIdx = lastXrefPartial;
+        releaseLastXrefPartial();
+        if (obj != null && obj.isDictionary()) {
+            PdfObject ob2 = getPdfObjectRelease(((PdfDictionary)obj).get(PdfName.DEST));
+            Object name = null;
+            if (ob2 != null) {
+                if (ob2.isName())
+                    name = ob2;
+                else if (ob2.isString())
+                    name = ob2.toString();
+                PdfArray dest = (PdfArray)names.get(name);
+                if (dest != null) {
+                    ((PdfDictionary)obj).put(PdfName.DEST, dest);
+                    setXrefPartialObject(objIdx, obj);
+                    return true;
+                }
+            }
+            else if ((ob2 = getPdfObject(((PdfDictionary)obj).get(PdfName.A))) != null) {
+                int obj2Idx = lastXrefPartial;
+                releaseLastXrefPartial();
+                PdfDictionary dic = (PdfDictionary)ob2;
+                PdfName type = (PdfName)getPdfObjectRelease(dic.get(PdfName.S));
+                if (PdfName.GOTO.equals(type)) {
+                    PdfObject ob3 = getPdfObjectRelease(dic.get(PdfName.D));
+                    if (ob3 != null) {
+                        if (ob3.isName())
+                            name = ob3;
+                        else if (ob3.isString())
+                            name = ob3.toString();
+                    }
+                    PdfArray dest = (PdfArray)names.get(name);
+                    if (dest != null) {
+                        dic.put(PdfName.D, dest);
+                        setXrefPartialObject(obj2Idx, ob2);
+                        setXrefPartialObject(objIdx, obj);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     protected static PdfDictionary duplicatePdfDictionary(PdfDictionary original, PdfDictionary copy, PdfReader newReader) {
@@ -3092,11 +3171,16 @@ public class PdfReader implements PdfViewerPreferences {
 
     static class PageRefs {
         private PdfReader reader;
-        private IntHashtable refsp;
+        /** ArrayList with the indirect references to every page. Element 0 = page 1; 1 = page 2;... Not used for partial reading. */
         private ArrayList refsn;
-        private ArrayList pageInh;
-        private int lastPageRead = -1;
+        /** The number of pages, updated only in case of partial reading. */
         private int sizep;
+        /** intHashtable that does the same thing as refsn in case of partial reading: major difference: not all the pages are read. */
+        private IntHashtable refsp;
+        /** Page number of the last page that was read (partial reading only) */
+        private int lastPageRead = -1;
+        /** stack to which pages dictionaries are pushed to keep track of the current page attributes */
+        private ArrayList pageInh;
         private boolean keepPages;
 
         private PageRefs(PdfReader reader) throws IOException {
@@ -3176,7 +3260,8 @@ public class PdfReader implements PdfViewerPreferences {
             return ref;
         }
 
-        /** Gets the page reference to this page.
+        /**
+         * Gets the page reference to this page.
          * @param pageNum the page number. 1 is the first
          * @return the page reference
          */
@@ -3275,6 +3360,10 @@ public class PdfReader implements PdfViewerPreferences {
             }
         }
 
+        /**
+         * Adds a PdfDictionary to the pageInh stack to keep track of the page attributes.
+         * @param nodePages	a Pages dictionary
+         */
         private void pushPageAttributes(PdfDictionary nodePages) {
             PdfDictionary dic = new PdfDictionary();
             if (!pageInh.isEmpty()) {
@@ -3288,6 +3377,9 @@ public class PdfReader implements PdfViewerPreferences {
             pageInh.add(dic);
         }
 
+        /**
+         * Removes the last PdfDictionary that was pushed to the pageInh stack.
+         */
         private void popPageAttributes() {
             pageInh.remove(pageInh.size() - 1);
         }
@@ -3295,6 +3387,7 @@ public class PdfReader implements PdfViewerPreferences {
         private void iteratePages(PRIndirectReference rpage) throws IOException {
             PdfDictionary page = (PdfDictionary)getPdfObject(rpage);
             PdfArray kidsPR = page.getAsArray(PdfName.KIDS);
+            // reference to a leaf
             if (kidsPR == null) {
                 page.put(PdfName.TYPE, PdfName.PAGE);
                 PdfDictionary dic = (PdfDictionary)pageInh.get(pageInh.size() - 1);
@@ -3310,6 +3403,7 @@ public class PdfReader implements PdfViewerPreferences {
                 }
                 refsn.add(rpage);
             }
+            // reference to a branch
             else {
                 page.put(PdfName.TYPE, PdfName.PAGES);
                 pushPageAttributes(page);
