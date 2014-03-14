@@ -513,7 +513,19 @@ public class PdfPTable implements LargeElement{
     	while (rowSpanAbove(rows.size(), currentRowIdx))
     		currentRowIdx += direction;
     }
-    
+
+    PdfPCell obtainCell(final int row, final int col) {
+        PdfPCell[] cells = ((PdfPRow)rows.get(row)).getCells();
+        for (int i = 0; i < cells.length; i++) {
+            if (cells[i] != null) {
+                if (col >= i && col < (i + cells[i].getColspan())) {
+                    return cells[i];
+                }
+            }
+        }
+        return null;
+    }
+
     /**
      * Checks if there are rows above belonging to a rowspan.
      * @param	currRow	the current row to check
@@ -532,21 +544,21 @@ public class PdfPTable implements LargeElement{
     	PdfPRow aboveRow = (PdfPRow)rows.get(row);
     	if (aboveRow == null)
     		return false;
-    	PdfPCell aboveCell = (PdfPCell)aboveRow.getCells()[currCol];
+    	PdfPCell aboveCell = obtainCell(row, currCol);
     	while ((aboveCell == null) && (row > 0)) {
     		aboveRow  = (PdfPRow)rows.get(--row);
     		if (aboveRow == null)
     			return false;
-    		aboveCell = (PdfPCell)aboveRow.getCells()[currCol];
+    		aboveCell = obtainCell(row, currCol);
     	}
     	
     	int distance = currRow - row;
 
     	if (aboveCell == null) {
         	int col = currCol - 1;
-        	aboveCell = (PdfPCell)aboveRow.getCells()[col];
+        	aboveCell = obtainCell(row, col);
         	while ((aboveCell == null) && (row > 0))
-        		aboveCell = (PdfPCell)aboveRow.getCells()[--col];
+        		aboveCell = obtainCell(row, --col);
         	return aboveCell != null && aboveCell.getRowspan() > distance;
     	}
     	
