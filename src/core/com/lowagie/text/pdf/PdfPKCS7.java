@@ -75,7 +75,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
 
-import org.bouncycastle.asn1.ASN1Encodable;
+import org.bouncycastle.asn1.ASN1Object;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1OutputStream;
@@ -85,12 +85,12 @@ import org.bouncycastle.asn1.ASN1TaggedObject;
 import org.bouncycastle.asn1.DEREnumerated;
 import org.bouncycastle.asn1.DERInteger;
 import org.bouncycastle.asn1.DERNull;
-import org.bouncycastle.asn1.DERObject;
+import org.bouncycastle.asn1.ASN1Primitive;
 import org.bouncycastle.asn1.DERObjectIdentifier;
 import org.bouncycastle.asn1.DEROctetString;
 import org.bouncycastle.asn1.DERSequence;
 import org.bouncycastle.asn1.DERSet;
-import org.bouncycastle.asn1.DERString;
+import org.bouncycastle.asn1.ASN1String;
 import org.bouncycastle.asn1.DERTaggedObject;
 import org.bouncycastle.asn1.DERUTCTime;
 import org.bouncycastle.asn1.cms.AttributeTable;
@@ -378,7 +378,7 @@ public class PdfPKCS7 {
             //
             // Basic checks to make sure it's a PKCS#7 SignedData Object
             //
-            DERObject pkcs;
+            ASN1Primitive pkcs;
 
             try {
                 pkcs = din.readObject();
@@ -463,7 +463,7 @@ public class PdfPKCS7 {
             if (signerInfo.getObjectAt(next) instanceof ASN1TaggedObject) {
                 ASN1TaggedObject tagsig = (ASN1TaggedObject)signerInfo.getObjectAt(next);
                 ASN1Set sseq = ASN1Set.getInstance(tagsig, false);
-                sigAttr = sseq.getEncoded(ASN1Encodable.DER);
+                sigAttr = sseq.getEncoded(org.bouncycastle.asn1.ASN1Encoding.DER);
 
                 for (int k = 0; k < sseq.size(); ++k) {
                     ASN1Sequence seq2 = (ASN1Sequence)sseq.getObjectAt(k);
@@ -948,7 +948,7 @@ public class PdfPKCS7 {
      */
     public static String getOCSPURL(X509Certificate certificate) throws CertificateParsingException {
         try {
-            DERObject obj = getExtensionValue(certificate, X509Extensions.AuthorityInfoAccess.getId());
+            ASN1Primitive obj = getExtensionValue(certificate, X509Extensions.AuthorityInfoAccess.getId());
             if (obj == null) {
                 return null;
             }
@@ -960,7 +960,7 @@ public class PdfPKCS7 {
                     continue;
                 } else {
                     if ((AccessDescription.getObjectAt(0) instanceof DERObjectIdentifier) && ((DERObjectIdentifier)AccessDescription.getObjectAt(0)).getId().equals("1.3.6.1.5.5.7.48.1")) {
-                        String AccessLocation =  getStringFromGeneralName((DERObject)AccessDescription.getObjectAt(1));
+                        String AccessLocation =  getStringFromGeneralName((ASN1Primitive)AccessDescription.getObjectAt(1));
                         if ( AccessLocation == null ) {
                             return "" ;
                         } else {
@@ -998,7 +998,7 @@ public class PdfPKCS7 {
         return false;
     }
     
-    private static DERObject getExtensionValue(X509Certificate cert, String oid) throws IOException {
+    private static ASN1Primitive getExtensionValue(X509Certificate cert, String oid) throws IOException {
         byte[] bytes = cert.getExtensionValue(oid);
         if (bytes == null) {
             return null;
@@ -1009,7 +1009,7 @@ public class PdfPKCS7 {
         return aIn.readObject();
     }
     
-    private static String getStringFromGeneralName(DERObject names) throws IOException {
+    private static String getStringFromGeneralName(ASN1Primitive names) throws IOException {
         DERTaggedObject taggedObject = (DERTaggedObject) names ;
         return new String(ASN1OctetString.getInstance(taggedObject, false).getOctets(), "ISO-8859-1");
     }
@@ -1017,13 +1017,13 @@ public class PdfPKCS7 {
     /**
      * Get the "issuer" from the TBSCertificate bytes that are passed in
      * @param enc a TBSCertificate in a byte array
-     * @return a DERObject
+     * @return a ASN1Primitive
      */
-    private static DERObject getIssuer(byte[] enc) {
+    private static ASN1Primitive getIssuer(byte[] enc) {
         try {
             ASN1InputStream in = new ASN1InputStream(new ByteArrayInputStream(enc));
             ASN1Sequence seq = (ASN1Sequence)in.readObject();
-            return (DERObject)seq.getObjectAt(seq.getObjectAt(0) instanceof DERTaggedObject ? 3 : 2);
+            return (ASN1Primitive)seq.getObjectAt(seq.getObjectAt(0) instanceof DERTaggedObject ? 3 : 2);
         }
         catch (IOException e) {
             throw new ExceptionConverter(e);
@@ -1033,13 +1033,13 @@ public class PdfPKCS7 {
     /**
      * Get the "subject" from the TBSCertificate bytes that are passed in
      * @param enc A TBSCertificate in a byte array
-     * @return a DERObject
+     * @return a ASN1Primitive
      */
-    private static DERObject getSubject(byte[] enc) {
+    private static ASN1Primitive getSubject(byte[] enc) {
         try {
             ASN1InputStream in = new ASN1InputStream(new ByteArrayInputStream(enc));
             ASN1Sequence seq = (ASN1Sequence)in.readObject();
-            return (DERObject)seq.getObjectAt(seq.getObjectAt(0) instanceof DERTaggedObject ? 5 : 4);
+            return (ASN1Primitive)seq.getObjectAt(seq.getObjectAt(0) instanceof DERTaggedObject ? 5 : 4);
         }
         catch (IOException e) {
             throw new ExceptionConverter(e);
@@ -1329,7 +1329,7 @@ public class PdfPKCS7 {
      */    
     public byte[] getAuthenticatedAttributeBytes(byte secondDigest[], Calendar signingTime, byte[] ocsp) {
         try {
-            return getAuthenticatedAttributeSet(secondDigest, signingTime, ocsp).getEncoded(ASN1Encodable.DER);
+            return getAuthenticatedAttributeSet(secondDigest, signingTime, ocsp).getEncoded(org.bouncycastle.asn1.ASN1Encoding.DER);
         }
         catch (Exception e) {
             throw new ExceptionConverter(e);
@@ -1564,7 +1564,7 @@ public class PdfPKCS7 {
                         vs = new ArrayList();
                         values.put(id, vs);
                     }
-                    vs.add(((DERString)s.getObjectAt(1)).getString());
+                    vs.add(((ASN1String)s.getObjectAt(1)).getString());
                 }
             }
         }
